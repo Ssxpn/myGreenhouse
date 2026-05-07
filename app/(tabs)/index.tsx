@@ -1,98 +1,117 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+/**
+ * app/(tabs)/index.tsx  →  Onglet "Accueil"
+ */
+import { EtatActuel } from '@/components/EtatActuel';
+import { LumiereControl } from '@/components/LumiereControl';
+import { SerreBanner } from '@/components/SerreBanner';
+import { VentilationControl } from '@/components/VentilationControl';
+import { TOPICS } from '@/constants/topics';
+import { useMqtt } from '@/contexts/MqttContext';
+import { useTheme } from '@/contexts/ThemeContext';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const DESKTOP_BREAKPOINT = 768;
+const REFRESH_TIMEOUT_MS = 5000;
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const { lastError, publish, messages, setArduinoStatus } = useMqtt();
+  const { theme }  = useTheme();
+  const { width }  = useWindowDimensions();
+  const isDesktop  = width >= DESKTOP_BREAKPOINT;
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  const [refreshing, setRefreshing] = useState(false);
+  const timeoutRef                  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastLocalisationRef         = useRef<string | null>(null);
+
+  useEffect(() => {
+    const latest = messages.find((m) => m.topic === TOPICS.LOCALISATION);
+    if (latest) lastLocalisationRef.current = latest.ts.toISOString();
+  }, [messages]);
+
+  useEffect(() => {
+    if (!refreshing) return;
+    const latest = messages.find((m) => m.topic === TOPICS.LOCALISATION);
+    if (!latest) return;
+    if (latest.ts.getTime() > Date.now() - REFRESH_TIMEOUT_MS) {
+      clearTimeout(timeoutRef.current!);
+      setRefreshing(false);
+    }
+  }, [messages, refreshing]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    publish(TOPICS.LOCALISATION_REQUEST, 'request');
+    timeoutRef.current = setTimeout(() => {
+      setArduinoStatus('offline');
+      setRefreshing(false);
+    }, REFRESH_TIMEOUT_MS);
+  }, [publish, setArduinoStatus]);
+
+  useEffect(() => {
+    return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
+  }, []);
+
+  return (
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          isDesktop ? undefined : (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.accent}
+              colors={[theme.accent]}
+            />
+          )
+        }
+      >
+        <SerreBanner />
+
+        {lastError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>⚠ {lastError}</Text>
+          </View>
+        )}
+
+        <EtatActuel />
+
+        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Contrôles</Text>
+
+        <LumiereControl />
+
+        <VentilationControl />
+
+        <View style={[styles.card, { backgroundColor: theme.surface }, styles.cardDisabled]}>
+          <View style={styles.row}>
+            <Text style={[styles.controlLabel, { color: theme.textPrimary }]}>💧 Brumisation</Text>
+            <Text style={[styles.comingSoon, { color: theme.textMuted }]}>Bientôt</Text>
+          </View>
+        </View>
+
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+  safe:         { flex: 1 },
+  scroll:       { padding: 20, paddingBottom: 100 },
+  errorBanner:  { backgroundColor: '#fef2f2', borderColor: '#fca5a5', borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 16 },
+  errorText:    { color: '#dc2626', fontSize: 13 },
+  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
+  card:         { borderRadius: 14, padding: 16, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  cardDisabled: { opacity: 0.5 },
+  row:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  controlLabel: { fontSize: 17, fontWeight: '600' },
+  comingSoon:   { fontSize: 12, fontStyle: 'italic' },
 });
