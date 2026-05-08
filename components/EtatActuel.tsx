@@ -4,7 +4,7 @@
 import { TOPICS } from '@/constants/topics';
 import { useMqtt } from '@/contexts/MqttContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 type LedStatus = {
@@ -123,11 +123,8 @@ function TemperatureCard({ value }: { value: string | null }) {
 }
 
 /* ─── Card Ventilation ─── */
-// Lit serre/fan/pwm (0-255 publié par l'Arduino)
-// pwm === 0 → éteinte  |  pwm > 0 → en marche, pct = round(pwm/255*100)
 function VentilationCard({ pwmRaw }: { pwmRaw: string | null }) {
   const { theme } = useTheme();
-
   const pwm  = pwmRaw !== null ? parseInt(pwmRaw, 10) : null;
   const isOn = pwm !== null && !isNaN(pwm) && pwm > 0;
   const pct  = isOn ? Math.round((pwm! / 255) * 100) : 0;
@@ -138,11 +135,9 @@ function VentilationCard({ pwmRaw }: { pwmRaw: string | null }) {
         <Text style={styles.cardIcon}>🌀</Text>
         <Text style={[styles.cardTitle, { color: theme.textSecondary }]}>Ventilation</Text>
       </View>
-
       <Text style={[styles.cardValue, { color: isOn ? '#0284c7' : theme.textMuted }]}>
         {pwmRaw === null ? '—' : isOn ? 'En marche' : 'Arrêtée'}
       </Text>
-
       {isOn && (
         <>
           <View style={[styles.progressBar, { backgroundColor: theme.background }]}>
@@ -153,7 +148,6 @@ function VentilationCard({ pwmRaw }: { pwmRaw: string | null }) {
           </Text>
         </>
       )}
-
       {pwmRaw === null && (
         <Text style={[styles.cardMeta, { color: theme.textMuted }]}>En attente…</Text>
       )}
@@ -171,7 +165,10 @@ export function EtatActuel() {
   const humidite    = getLastPayload(messages, TOPICS.HUMIDITE);
   const fanPwm      = getLastPayload(messages, TOPICS.FAN_PWM);
 
-  const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const [now, setNow] = useState('');
+  useEffect(() => {
+    setNow(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
+  }, [messages]);
 
   return (
     <View style={styles.container}>
@@ -179,23 +176,42 @@ export function EtatActuel() {
         <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>État actuel</Text>
         <Text style={[styles.updateTime, { color: theme.textMuted }]}>Mis à jour : {now}</Text>
       </View>
-      <View style={styles.grid}>
-        <LumiereCard     status={ledStatus} messages={messages} />
-        <HumiditeCard    value={humidite} />
+
+      {/* Rangée 1 */}
+      <View style={styles.row}>
+        <LumiereCard  status={ledStatus} messages={messages} />
+        <HumiditeCard value={humidite} />
+      </View>
+
+      {/* Rangée 2 */}
+      <View style={styles.row}>
         <TemperatureCard value={temperature} />
         <VentilationCard pwmRaw={fanPwm} />
       </View>
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container:      { marginBottom: 24 },
-  sectionHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle:   { fontSize: 18, fontWeight: '700' },
-  updateTime:     { fontSize: 11 },
-  grid:           { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  card:           { borderRadius: 14, padding: 14, width: '47.5%', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  container:     { marginBottom: 24 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionTitle:  { fontSize: 18, fontWeight: '700' },
+  updateTime:    { fontSize: 11 },
+
+  // ── Grille : 2 rangées explicites, flex: 1 sur les cards ──
+  row:  { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  card: {
+    flex:          1,          // ← chaque card prend la moitié de la rangée, gap compris
+    borderRadius:  14,
+    padding:       14,
+    shadowColor:   '#000',
+    shadowOpacity: 0.06,
+    shadowRadius:  6,
+    shadowOffset:  { width: 0, height: 2 },
+    elevation:     2,
+  },
+
   cardHeader:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   cardIcon:       { fontSize: 16 },
   cardTitle:      { fontSize: 13, fontWeight: '500' },
