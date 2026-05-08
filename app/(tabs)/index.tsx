@@ -2,6 +2,7 @@
  * app/(tabs)/index.tsx  →  Onglet "Accueil"
  */
 import { EtatActuel } from '@/components/EtatActuel';
+import { HumidifierControl } from '@/components/HumidifierControl';
 import { LumiereControl } from '@/components/LumiereControl';
 import { SerreBanner } from '@/components/SerreBanner';
 import { VentilationControl } from '@/components/VentilationControl';
@@ -91,12 +92,7 @@ export default function HomeScreen() {
 
         <VentilationControl />
 
-        <View style={[styles.card, { backgroundColor: theme.surface }, styles.cardDisabled]}>
-          <View style={styles.row}>
-            <Text style={[styles.controlLabel, { color: theme.textPrimary }]}>💧 Brumisation</Text>
-            <Text style={[styles.comingSoon, { color: theme.textMuted }]}>Bientôt</Text>
-          </View>
-        </View>
+        <HumidifierControl />
 
       </ScrollView>
     </SafeAreaView>
