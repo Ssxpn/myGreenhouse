@@ -4,30 +4,36 @@
  */
 export const TOPICS = {
   // ── Statut général ──────────────────────────────────────────
-  STATUS:               'serre/status',               // arduino → app : "online" | "offline" (LWT)
+  STATUS:               'serre/status',
 
   // ── Localisation ────────────────────────────────────────────
-  LOCALISATION:         'serre/localisation',          // arduino → app : {"ip":"x.x.x.x"}
-  LOCALISATION_REQUEST: 'serre/localisation/request',  // app → arduino : "request"
+  LOCALISATION:         'serre/localisation',
+  LOCALISATION_REQUEST: 'serre/localisation/request',
 
   // ── LED / Lumière ────────────────────────────────────────────
-  LED_CMD:      'serre/led/cmd',       // app → arduino : "ON" | "OFF" (mode manuel)
-  LED_STATE:    'serre/led/state',     // arduino → app : "ON" | "OFF"
-  LED_MODE:     'serre/led/mode',      // app → arduino : "manuel" | "programmateur" | "solaire"
-  LED_SCHEDULE: 'serre/led/schedule',  // app → arduino : {"on":"08:00","off":"20:00"}
-  LED_STATUS:   'serre/led/status',    // arduino → app : {mode, ledOn, nextEvent, nextTime, timeOn, timeOff}
+  LED_CMD:      'serre/led/cmd',
+  LED_STATE:    'serre/led/state',
+  LED_MODE:     'serre/led/mode',
+  LED_SCHEDULE: 'serre/led/schedule',
+  LED_STATUS:   'serre/led/status',
 
   // ── Capteurs ─────────────────────────────────────────────────
-  TEMPERATURE: 'serre/capteurs/temperature', // arduino → app : "23.5"
-  HUMIDITE:    'serre/capteurs/humidite',    // arduino → app : "62.1"
+  TEMPERATURE: 'serre/capteurs/temperature',
+  HUMIDITE:    'serre/capteurs/humidite',
 
   // ── Ventilation ──────────────────────────────────────────────
-  FAN_STATE: 'serre/fan/state',  // app → arduino : "ON" | "OFF"
-  FAN_SPEED: 'serre/fan/speed',  // app → arduino : "0"-"100"
-  FAN_PWM:   'serre/fan/pwm',    // arduino → app : "0"-"255"
+  FAN_STATE: 'serre/fan/state',
+  FAN_SPEED: 'serre/fan/speed',
+  FAN_PWM:   'serre/fan/pwm',
 
   // ── Brumisateur ──────────────────────────────────────────────
-  MIST_CMD:      'serre/mist/cmd',       // app → arduino : "ON" | "OFF"
-  MIST_SETPOINT: 'serre/mist/setpoint',  // app → arduino : "0"-"100" (consigne humidité %)
-  MIST_STATE:    'serre/mist/state',     // arduino → app : "ON" | "OFF"
+  MIST_CMD:      'serre/mist/cmd',
+  MIST_SETPOINT: 'serre/mist/setpoint',  // retained → consigne persistée
+  MIST_STATE:    'serre/mist/state',
+
+  // ── Préférences UI persistées (retained, app → app) ──────────
+  // Publiés avec retain:true — HiveMQ les renvoie à chaque reconnexion.
+  PREF_MIST_MODE: 'serre/prefs/mist/mode',  // "auto" | "manuel"
+  PREF_FAN_SPEED: 'serre/prefs/fan/speed',  // "0"-"100"
+  PREF_FAN_MODE:  'serre/prefs/fan/mode',   // "auto" | "manuel"
 };
