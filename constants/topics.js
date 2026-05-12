@@ -28,12 +28,10 @@ export const TOPICS = {
 
   // ── Brumisateur ──────────────────────────────────────────────
   MIST_CMD:      'serre/mist/cmd',
-  MIST_SETPOINT: 'serre/mist/setpoint',  // retained → consigne persistée
+  MIST_SETPOINT: 'serre/mist/setpoint',
   MIST_STATE:    'serre/mist/state',
 
-  // ── Préférences UI persistées (retained, app → app) ──────────
-  // Publiés avec retain:true — HiveMQ les renvoie à chaque reconnexion.
-  PREF_MIST_MODE: 'serre/prefs/mist/mode',  // "auto" | "manuel"
-  PREF_FAN_SPEED: 'serre/prefs/fan/speed',  // "0"-"100"
-  PREF_FAN_MODE:  'serre/prefs/fan/mode',   // "auto" | "manuel"
+  // ── Préférences EEPROM ───────────────────────────────────────
+  // L'app publie ce topic → l'Arduino répond en republiant fanSpeed + mistSetpoint
+  PREFS_REQUEST: 'serre/prefs/request',
 };
