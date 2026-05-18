@@ -3,10 +3,12 @@
  *
  * Mode auto : le ventilateur s'allume automatiquement quand le brumisateur
  *             est actif (serre/mist/state = "ON") et s'arrête sinon.
- * Mode manuel : contrôle direct ON/OFF + slider de puissance.
+ * Mode manuel : contrôle direct ON/OFF uniquement (relais simple).
+ *
+ * L'appli publie sur serre/fan/cmd   → commande envoyée à l'Arduino
+ * L'appli lit    sur serre/fan/state → état réel confirmé par l'Arduino
  */
 
-import { Slider } from '@/components/Slider';
 import { Switch } from '@/components/Switch';
 import { TOPICS } from '@/constants/topics';
 import { useMqtt } from '@/contexts/MqttContext';
@@ -23,20 +25,16 @@ export function VentilationControl({
   const { theme, isDark }     = useTheme();
 
   const [isOn,     setIsOn]     = useState(false);
-  const [speed,    setSpeed]    = useState(50);
-  const [autoMode, setAutoMode] = useState(false); // false = manuel par défaut
+  const [autoMode, setAutoMode] = useState(false);
 
-  const speedRef = useRef(speed);
-  speedRef.current = speed;
+  const isOnRef = useRef(isOn);
+  useEffect(() => { isOnRef.current = isOn; }, [isOn]);
 
-  /* ── Lecture MQTT : état ventilateur ── */
+  /* ── Lecture MQTT : état réel confirmé par l'Arduino ── */
   useEffect(() => {
-    const pwmMsg = messages.find((m) => m.topic === TOPICS.FAN_PWM);
-    if (!pwmMsg) return;
-    const pwm = parseInt(pwmMsg.payload, 10);
-    if (isNaN(pwm)) return;
-    setIsOn(pwm > 0);
-    if (pwm > 0) setSpeed(Math.round((pwm / 255) * 100));
+    const fanMsg = messages.find((m) => m.topic === TOPICS.FAN_STATE);
+    if (!fanMsg) return;
+    setIsOn(fanMsg.payload.trim() === 'ON');
   }, [messages]);
 
   /* ── Mode auto : suit l'état du brumisateur ── */
@@ -45,40 +43,29 @@ export function VentilationControl({
     const mistMsg = messages.find((m) => m.topic === TOPICS.MIST_STATE);
     if (!mistMsg) return;
     const mistOn = mistMsg.payload.trim() === 'ON';
-    if (mistOn !== isOn) {
-      publish(TOPICS.FAN_STATE, mistOn ? 'ON' : 'OFF');
-      if (mistOn) publish(TOPICS.FAN_SPEED, String(speedRef.current));
+    if (mistOn !== isOnRef.current) {
+      publish(TOPICS.FAN_CMD, mistOn ? 'ON' : 'OFF');
     }
-  }, [messages, autoMode, isOn, publish]);
+  }, [messages, autoMode, publish]);
 
   /* ── Basculement mode auto/manuel ── */
   const handleAutoToggle = useCallback(() => {
     const next = !autoMode;
     setAutoMode(next);
     if (!next) {
-      // Passage en manuel → on coupe le ventilateur par sécurité
-      publish(TOPICS.FAN_STATE, 'OFF');
+      publish(TOPICS.FAN_CMD, 'OFF');
     }
   }, [autoMode, publish]);
 
   /* ── Toggle ON/OFF manuel ── */
   const handleToggle = useCallback(() => {
-    const next = !isOn;
-    setIsOn(next);
-    publish(TOPICS.FAN_STATE, next ? 'ON' : 'OFF');
-    if (next) publish(TOPICS.FAN_SPEED, String(speedRef.current));
-  }, [isOn, publish]);
-
-  /* ── Slider relâché ── */
-  const handleRelease = useCallback((finalValue: number) => {
-    setSpeed(finalValue);
-    if (isOn) publish(TOPICS.FAN_SPEED, String(finalValue));
-  }, [isOn, publish]);
+  publish(TOPICS.FAN_CMD, !isOnRef.current ? 'ON' : 'OFF');
+}, [publish]);
 
   return (
     <View style={[styles.card, { backgroundColor: theme.surface }]}>
 
-      {/* ── En-tête — même format que LumiereControl ── */}
+      {/* ── En-tête ── */}
       <View style={styles.cardHeader}>
         <Text style={styles.cardIcon}>🌀</Text>
         <Text style={[styles.cardTitle, { color: theme.textPrimary }]}>Ventilation</Text>
@@ -97,8 +84,10 @@ export function VentilationControl({
         </View>
       </View>
 
-      {/* ── Mode auto/manuel ── */}
+      {/* ── Panneau ── */}
       <View style={styles.panel}>
+
+        {/* ── Mode auto/manuel ── */}
         <View style={styles.row}>
           <Text style={[styles.panelLabel, { color: theme.textSecondary }]}>
             {autoMode ? 'Mode automatique' : 'Mode manuel'}
@@ -106,14 +95,12 @@ export function VentilationControl({
           <Switch value={autoMode} onValueChange={handleAutoToggle} />
         </View>
 
-        {/* ── Note mode auto ── */}
         {autoMode && (
           <Text style={[styles.autoNote, { color: theme.textMuted }]}>
             💧 La ventilation suit l'état du brumisateur
           </Text>
         )}
 
-        {/* ── Contrôle manuel : toggle ON/OFF ── */}
         {!autoMode && (
           <View style={styles.row}>
             <Text style={[styles.panelLabel, { color: theme.textSecondary }]}>
@@ -123,28 +110,7 @@ export function VentilationControl({
           </View>
         )}
 
-        {/* ── Slider puissance (toujours visible) ── */}
-        <View style={styles.powerSection}>
-          <Text style={[styles.powerLabel, { color: theme.textSecondary }]}>
-            ⚡ Puissance
-          </Text>
-          <Slider
-            initialValue={speed}
-            onValueChange={setSpeed}
-            onRelease={handleRelease}
-            disabled={!isOn}
-            scrollRef={scrollRef}
-          />
-          {!isOn && (
-            <Text style={[styles.powerNote, { color: theme.textMuted }]}>
-              {autoMode
-                ? 'Le ventilateur s\'allumera avec le brumisateur'
-                : 'Activez la ventilation pour régler'}
-            </Text>
-          )}
-        </View>
       </View>
-
     </View>
   );
 }
@@ -160,22 +126,13 @@ const styles = StyleSheet.create({
     shadowOffset:  { width: 0, height: 2 },
     elevation:     2,
   },
-
-  // ── En-tête — identique à LumiereControl ──
   cardHeader:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
   cardIcon:       { fontSize: 18 },
   cardTitle:      { fontSize: 16, fontWeight: '700', flex: 1 },
   stateBadge:     { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   stateBadgeText: { fontSize: 12, fontWeight: '600' },
-
-  // ── Panneau ──
-  panel:        { gap: 12 },
-  row:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  panelLabel:   { fontSize: 13 },
-  autoNote:     { fontSize: 12, fontStyle: 'italic' },
-
-  // ── Slider puissance ──
-  powerSection: { gap: 8 },
-  powerLabel:   { fontSize: 13, fontWeight: '600' },
-  powerNote:    { fontSize: 11, fontStyle: 'italic', textAlign: 'center' },
+  panel:          { gap: 12 },
+  row:            { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  panelLabel:     { fontSize: 13 },
+  autoNote:       { fontSize: 12, fontStyle: 'italic' },
 });

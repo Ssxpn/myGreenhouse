@@ -23,8 +23,7 @@ export const TOPICS = {
 
   // ── Ventilation ──────────────────────────────────────────────
   FAN_STATE: 'serre/fan/state',
-  FAN_SPEED: 'serre/fan/speed',
-  FAN_PWM:   'serre/fan/pwm',
+  FAN_CMD:   'serre/fan/cmd', 
 
   // ── Brumisateur ──────────────────────────────────────────────
   MIST_CMD:      'serre/mist/cmd',
