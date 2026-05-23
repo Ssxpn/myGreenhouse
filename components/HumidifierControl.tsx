@@ -2,10 +2,12 @@
  * components/HumidifierControl.tsx
  *
  * Architecture :
- *   - L'Arduino republie serre/mist/setpoint (retained, EEPROM) à chaque reconnexion.
- *   - Le Slider n'est monté qu'après la première réception MQTT → initialValue correct.
- *   - hasLoaded : spinner uniquement au premier chargement, jamais au refresh.
- *   - isSliding : protège contre l'écrasement pendant le glissement.
+ *   - L'Arduino publie serre/mist/mode (retained) à chaque reconnexion → l'app se synchronise.
+ *   - L'app publie serre/mist/mode quand l'utilisateur change de mode → l'Arduino suit.
+ *   - En mode auto  : l'Arduino gère l'hystérésis, l'app n'envoie que le setpoint.
+ *   - En mode manuel: l'Arduino n'intervient pas, l'app envoie MIST_CMD ON/OFF.
+ *   - Le Slider n'est monté qu'après la première réception MQTT du setpoint.
+ *   - MIST_CMD est ignoré par l'Arduino si mistMode == MIST_AUTO → cohérence garantie.
  */
 
 import { Slider } from '@/components/Slider';
@@ -21,7 +23,7 @@ export function HumidifierControl() {
   const { theme, isDark }     = useTheme();
 
   const [target,   setTarget]   = useState<number>(75);
-  const [autoMode, setAutoMode] = useState(true);
+  const [autoMode, setAutoMode] = useState(true);   // reflète serre/mist/mode
   const [mistOn,   setMistOn]   = useState(false);
   const [humidity, setHumidity] = useState<number | null>(null);
   const [loaded,   setLoaded]   = useState(false);
@@ -31,17 +33,26 @@ export function HumidifierControl() {
   const isSliding   = useRef(false);
   const hasLoaded   = useRef(false);
 
-  /* ── Lecture MQTT ── */
+  // ── Lecture MQTT ──────────────────────────────────────────────────────
   useEffect(() => {
+    // Humidité mesurée
     const humMsg = messages.find((m) => m.topic === TOPICS.HUMIDITE);
     if (humMsg) {
       const parsed = parseFloat(humMsg.payload);
       if (!isNaN(parsed)) setHumidity(parsed);
     }
 
+    // État brumisateur
     const mistMsg = messages.find((m) => m.topic === TOPICS.MIST_STATE);
     if (mistMsg) setMistOn(mistMsg.payload.trim() === 'ON');
 
+    // Mode brumisateur (retained par l'Arduino) — source de vérité
+    const modeMsg = messages.find((m) => m.topic === TOPICS.MIST_MODE);
+    if (modeMsg) {
+      setAutoMode(modeMsg.payload.trim() === 'auto');
+    }
+
+    // Setpoint (retained par l'Arduino)
     const setpointMsg = messages.find((m) => m.topic === TOPICS.MIST_SETPOINT);
     if (setpointMsg) {
       const sp = parseFloat(setpointMsg.payload);
@@ -59,7 +70,7 @@ export function HumidifierControl() {
     }
   }, [messages]);
 
-  /* ── Slider bougé → debounce 300ms ── */
+  // ── Slider bougé → debounce 300ms ────────────────────────────────────
   const handleSetpointChange = useCallback(
     (value: number) => {
       isSliding.current = true;
@@ -73,7 +84,7 @@ export function HumidifierControl() {
     [publish],
   );
 
-  /* ── Slider relâché → publication immédiate ── */
+  // ── Slider relâché → publication immédiate ────────────────────────────
   const handleSetpointRelease = useCallback(
     (value: number) => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -84,23 +95,29 @@ export function HumidifierControl() {
     [publish],
   );
 
-  /* ── Mode auto/manuel ── */
+  // ── Bascule auto / manuel ─────────────────────────────────────────────
   const handleAutoToggle = useCallback(() => {
     const next = !autoMode;
+    // On publie d'abord le nouveau mode vers l'Arduino.
+    // L'Arduino met à jour mistMode et répondra en retained → notre useEffect
+    // mettra autoMode à jour. On le fait aussi localement pour l'UX immédiate.
+    publish(TOPICS.MIST_MODE, next ? 'auto' : 'manuel');
     setAutoMode(next);
-    if (!next) {
-      publish(TOPICS.MIST_CMD, 'OFF');
-    } else {
+    // Si on repasse en auto, on renvoie le setpoint pour que l'Arduino
+    // réévalue immédiatement l'hystérésis avec la valeur courante.
+    if (next) {
       publish(TOPICS.MIST_SETPOINT, String(targetRef.current));
     }
+    // Si on passe en manuel on ne touche pas à l'état du brumisateur :
+    // l'utilisateur choisit ensuite via le switch dédié.
   }, [autoMode, publish]);
 
-  /* ── Commande manuelle ── */
+  // ── Commande manuelle ON/OFF ──────────────────────────────────────────
   const handleManualToggle = useCallback(() => {
     publish(TOPICS.MIST_CMD, mistOn ? 'OFF' : 'ON');
   }, [mistOn, publish]);
 
-  /* ── Dérivés d'affichage ── */
+  // ── Dérivés d'affichage ───────────────────────────────────────────────
   const humidityDisplay = humidity !== null ? `${humidity.toFixed(1)} %` : '— %';
 
   return (

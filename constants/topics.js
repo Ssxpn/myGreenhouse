@@ -29,6 +29,7 @@ export const TOPICS = {
   MIST_CMD:      'serre/mist/cmd',
   MIST_SETPOINT: 'serre/mist/setpoint',
   MIST_STATE:    'serre/mist/state',
+  MIST_MODE:     'serre/mist/mode',
 
   // ── Préférences EEPROM ───────────────────────────────────────
   // L'app publie ce topic → l'Arduino répond en republiant fanSpeed + mistSetpoint
